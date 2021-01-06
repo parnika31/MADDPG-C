@@ -1,4 +1,4 @@
-# **Multi Agents Constrained Attention Actor Critic**
+# **Constrained MADDPG**
 
 Code for Constrained MADDPG (MADDPG-C).
 
