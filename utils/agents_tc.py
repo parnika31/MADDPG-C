@@ -8,8 +8,8 @@ from .noise import OUNoise
 
 class DDPGAgent(object):
     """
-    General class for DDPG agents (policy, critic, target policy, target
-    critic, exploration noise)
+    General class for DDPG agents (policy, critic, penalty critics, target policy, target
+    critic, target penalty critics, exploration noise)
     """
     def __init__(self, num_in_pol, num_out_pol, num_in_critic, hidden_dim=128,
                  lr=0.001, discrete_action=True):
