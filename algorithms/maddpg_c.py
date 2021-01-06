@@ -83,7 +83,7 @@ class MADDPG(object):
         """
         Update parameters of agent model based on sample from replay buffer
         Inputs:
-            sample: tuple of (observations, actions, rewards, next
+            sample: tuple of (observations, actions, rewards, penalties, next
                     observations, and episode end masks) sampled randomly from
                     the replay buffer. Each is a list with entries
                     corresponding to each agent
@@ -141,10 +141,7 @@ class MADDPG(object):
 
         if self.discrete_action:
             # Forward pass as if onehot (hard=True) but backprop through a differentiable
-            # Gumbel-Softmax sample. The MADDPG paper uses the Gumbel-Softmax trick to backprop
-            # through discrete categorical samples, but I'm not sure if that is
-            # correct since it removes the assumption of a deterministic policy for
-            # DDPG. Regardless, discrete policies don't seem to learn properly without it.
+            # Gumbel-Softmax sample. 
             curr_pol_out = curr_agent.policy(obs[agent_i])
             curr_pol_vf_in = gumbel_softmax(curr_pol_out, hard=True)
         else:
