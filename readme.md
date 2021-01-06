@@ -1,6 +1,4 @@
-# **Constrained MADDPG**
-
-Code for Constrained MADDPG (MADDPG-C).
+# **Constrained MADDPG (MADDPG-C)**
 
 Base Code adopted from Shariq Iqbal's [PyTorch implementation](https://github.com/shariqiqbal2810/maddpg-pytorch).
 
