@@ -83,7 +83,7 @@ class MADDPG(object):
         """
         Update parameters of agent model based on sample from replay buffer
         Inputs:
-            sample: tuple of (observations, actions, rewards, next
+            sample: tuple of (observations, actions, rewards, all penalties, next
                     observations, and episode end masks) sampled randomly from
                     the replay buffer. Each is a list with entries
                     corresponding to each agent
