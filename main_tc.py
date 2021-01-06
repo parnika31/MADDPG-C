@@ -158,7 +158,6 @@ def run(config):
                     maddpg.prep_training(device='gpu')
                 else:
                     maddpg.prep_training(device='cpu')
-
                 for u_i in range(config.num_updates):
                     for a_i in range(maddpg.nagents):
                         sample = replay_buffer.sample(config.batch_size,
