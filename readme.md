@@ -18,7 +18,7 @@ PyTorch, version: 1.1.0 (Minimum)
 
 ### Training 
 #
-To train on default hyperparameters(used for the pre-trained models), run the following commands:
+To train on default hyperparameters, run the following commands:
 
 For Constrained Cooperative Navigation: `python main.py`
 
