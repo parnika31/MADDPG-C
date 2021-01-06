@@ -16,7 +16,6 @@ from random import seed
 
 USE_CUDA = True  # torch.cuda.is_available()
 
-
 def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
     def get_env_fn(rank):
         def init_env():
@@ -24,7 +23,6 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
             env.seed(seed + rank * 1000)
             np.random.seed(seed + rank * 1000)
             return env
-
         return init_env
 
     if n_rollout_threads == 1:
@@ -64,17 +62,20 @@ def run(config):
     run_dir = model_dir / curr_run
     log_dir = run_dir / 'logs'
     os.makedirs(str(log_dir))
+    
     logger = SummaryWriter(str(log_dir))
+    
     if not USE_CUDA:
         torch.set_num_threads(config.n_training_threads)
 
     env = make_parallel_env(config.env_id, config.n_rollout_threads, config.seed,
                             config.discrete_action)
+    
     maddpg = MADDPG.init_from_env(env, nagents=config.n_agents,
                                   tau=config.tau,
                                   lr=config.lr,
                                   hidden_dim=config.hidden_dim, gamma=config.gamma)
-
+    
     replay_buffer = ReplayBuffer(config.buffer_length, maddpg.nagents,
                                  [obsp.shape[0] for obsp in env.observation_space],
                                  [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
@@ -156,25 +157,16 @@ def run(config):
 
                 maddpg.prep_rollouts(device='cpu')
                 lb_t = torch.from_numpy(np.asarray(lb_t_ls_up)).mean()
-
-        ep_rews = replay_buffer.get_average_rewards(
-            config.episode_length * config.n_rollout_threads)
-        ep_penalties = replay_buffer.get_average_penalties(
-            config.episode_length * config.n_rollout_threads)
+                
         all_rewards.append(np.sum(episode_rewards))
         all_penalties.append(np.sum(episode_penalties))
-
-        for a_i, a_ep_rew in enumerate(ep_rews):
-            logger.add_scalar('agent%i/mean_episode_rewards' % a_i, a_ep_rew, ep_i)
-        for a_i, a_ep_pen in enumerate(ep_penalties):
-            logger.add_scalar('agent%i/mean_episode_penalties' % a_i, a_ep_pen, ep_i)
 
         log_rew = np.mean(all_rewards[-1024:])
         log_penalty1 = np.mean(all_penalties[-1024:])
 
         logger.add_scalar("Mean cost over latest 1024 epi/Training:-", log_rew, ep_i)
         logger.add_scalar("Mean penalty_1 over latest 1024 epi/Training:-", log_penalty1, ep_i)
-        logger.add_scalar('lbt', lb_t, ep_i)
+        #logger.add_scalar('lbt', lb_t, ep_i)
 
         if ep_i % config.save_interval < config.n_rollout_threads:
             maddpg.prep_rollouts(device='cpu')
