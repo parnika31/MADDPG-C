@@ -36,7 +36,7 @@ def run(config):
     np.random.seed(config.seed)
     seed(config.seed)
     if USE_CUDA:
-        torch.cuda.set_device(torch.device("cuda:1"))
+        torch.cuda.set_device(0)
         torch.cuda.manual_seed(config.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = True
