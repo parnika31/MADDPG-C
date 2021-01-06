@@ -185,8 +185,8 @@ def run(config):
         logger.add_scalar("Mean cost over latest 1024 epi/Training:-", log_rew, ep_i)
         logger.add_scalar("Mean penalty_1 over latest 1024 epi/Training:-", log_penalty1, ep_i)
         logger.add_scalar("Mean penalty_2 over latest 1024 epi/Training:-", log_penalty2, ep_i)
-        logger.add_scalar('lbt1', lb_t_1, ep_i)
-        logger.add_scalar('lbt2', lb_t_2, ep_i)
+        #logger.add_scalar('lbt1', lb_t_1, ep_i)
+        #logger.add_scalar('lbt2', lb_t_2, ep_i)
 
         if ep_i % config.save_interval < config.n_rollout_threads:
             maddpg.prep_rollouts(device='cpu')
