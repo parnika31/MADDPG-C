@@ -23,5 +23,3 @@ To train on default hyperparameters(used for the pre-trained models), run the fo
 For Constrained Cooperative Navigation: `python main.py`
 
 For Constrained Cooperative Treasure Collection: `python main_tc.py`
-
-For Constrained Cooperative Rover Tower: `python main_speaker_listener.py`
