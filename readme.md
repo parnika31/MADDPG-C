@@ -2,13 +2,15 @@
 
 Code for Constrained MADDPG (MADDPG-C).
 
-Base Code is used from :- https://github.com/shariqiqbal2810/maddpg-pytorch
+Base Code adopted from Shariq Iqbal's [PyTorch implementation](https://github.com/shariqiqbal2810/maddpg-pytorch).
 
 ### Requirements 
 #
 Python 3.7.1 (Minimum) 
 
 PyTorch, version: 1.1.0 (Minimum) 
+
+[OpenAI Baselines](https://github.com/openai/baselines/)
 
 [OpenAI Gym](https://github.com/openai/gym), version: 0.9.4
 
