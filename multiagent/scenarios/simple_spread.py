@@ -77,7 +77,7 @@ class Scenario(BaseScenario):
 
         for a in world.agents:
             for b in world.agents:
-                if a.collide and a != b and self.is_collision(a, b):
+                if a != b and self.is_collision(a, b):
                     seed = 1
         if seed == 1:
             rew += 1000
