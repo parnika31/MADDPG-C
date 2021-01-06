@@ -12,8 +12,8 @@ from utils.env_wrappers import SubprocVecEnv, DummyVecEnv
 from algorithms.maddpg_c_ctc import MADDPG
 from random import seed
 
-
 USE_CUDA = True
+
 
 def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
     def get_env_fn(rank):
@@ -36,7 +36,7 @@ def run(config):
     np.random.seed(config.seed)
     seed(config.seed)
     if USE_CUDA:
-        torch.cuda.set_device(0)
+        torch.cuda.set_device(torch.device("cuda:1"))
         torch.cuda.manual_seed(config.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = True
@@ -45,16 +45,13 @@ def run(config):
     all_penalties_1 = []
     all_penalties_2 = []
 
-    b_t = 0.000001
-    alpha_1 = 2
-    alpha_2 = 2
+    b_t = 0.00001
+    alpha_1 = 12
+    alpha_2 = 0.2
 
     lb_t_1 = torch.from_numpy(np.random.rand(1)).float()
     lb_t_2 = torch.from_numpy(np.random.rand(1)).float()
-    extra_cost_1 = 1500
-    extra_cost_2 = 1000
-    extra_cost_3 = 500
-
+    
     model_dir = Path('./models') / config.env_id / config.model_name
     if not model_dir.exists():
         curr_run = 'run1'
@@ -66,6 +63,7 @@ def run(config):
             curr_run = 'run1'
         else:
             curr_run = 'run%i' % (max(exst_run_nums) + 1)
+
     run_dir = model_dir / curr_run
     log_dir = str(run_dir / 'logs')
     os.makedirs(log_dir)
@@ -77,20 +75,19 @@ def run(config):
                                   tau=config.tau,
                                   lr=config.lr,
                                   hidden_dim=config.hidden_dim, gamma=config.gamma)
-    
+
     replay_buffer = ReplayBuffer(config.buffer_length, maddpg.nagents,
                                  [obsp.shape[0] for obsp in env.observation_space],
                                  [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
                                   for acsp in env.action_space])
     t = 0
     for ep_i in range(0, config.n_episodes, config.n_rollout_threads):
-        # print(ep_i)
         obs = env.reset()
         maddpg.prep_rollouts(device='cpu')
 
         episode_rewards = []
-        episode_penalties_1 = []
-        episode_penalties_2 = []
+        episode_coll_penalties = []
+        episode_dep_penalties = []
         explr_pct_remaining = max(0, config.n_exploration_eps - ep_i) / config.n_exploration_eps
         maddpg.scale_noise(
             config.final_noise_scale + (config.init_noise_scale - config.final_noise_scale) * explr_pct_remaining)
@@ -110,80 +107,43 @@ def run(config):
             next_obs, rewards, dones, infos = env.step(actions)
 
             ls_rollout_rewards = []
-            ls_rollout_penalties_1 = []
-            ls_rollout_penalties_2 = []
-            penalties_1 = []
-            penalties_2 = []
+            ls_rollout_collectors_penalty = []
+            ls_rollout_depositors_penalty = []
+
+            collectors_penalty = []
+            depositors_penalty = []
+            lagrangian_rews = []
+
             for reward in rewards:
-                penalty_1 = 0
-                penalty_2 = 0
-
-                if (reward[0] - extra_cost_1) > 0:
-                    for idx in range(len(reward)):
-                        reward[idx] -= extra_cost_1
-
-                    penalty_1 = 1
-                    penalty_2 = 1
-
-                    ls_rollout_rewards.append(reward[0])
-                    ls_rollout_penalties_1.append(penalty_1)
-                    ls_rollout_penalties_2.append(penalty_2)
-
-                    penalties_1.append(np.asarray([penalty_1] * config.n_agents))
-                    penalties_2.append(np.asarray([penalty_2] * config.n_agents))
-
-                    for idx in range(len(reward)):
-                        reward[idx] += ((lb_t_1 * penalty_1)+(lb_t_2*penalty_2))
-
-                elif (reward[0] - extra_cost_2) > 0:
-                    for idx in range(len(reward)):
-                        reward[idx] -= extra_cost_2
-
-                    penalty_1 = 1
-
-                    ls_rollout_rewards.append(reward[0])
-                    ls_rollout_penalties_1.append(penalty_1)
-                    ls_rollout_penalties_2.append(penalty_2)
-
-                    penalties_1.append(np.asarray([penalty_1] * config.n_agents))
-                    penalties_2.append(np.asarray([penalty_2] * config.n_agents))
-
-                    for idx in range(len(reward)):
-                        reward[idx] += ((lb_t_1 * penalty_1)+(lb_t_2*penalty_2))
-
-                elif (reward[0] - extra_cost_3) > 0:
-                    for idx in range(len(reward)):
-                        reward[idx] -= extra_cost_3
-
-                    penalty_2 = 1
-
-                    ls_rollout_rewards.append(reward[0])
-                    ls_rollout_penalties_1.append(penalty_1)
-                    ls_rollout_penalties_2.append(penalty_2)
-
-                    penalties_1.append(np.asarray([penalty_1] * config.n_agents))
-                    penalties_2.append(np.asarray([penalty_2] * config.n_agents))
-
-                    for idx in range(len(reward)):
-                        reward[idx] += ((lb_t_1 * penalty_1) + (lb_t_2 * penalty_2))
-                else:
-                    ls_rollout_rewards.append(reward[0])
-                    ls_rollout_penalties_1.append(penalty_1)
-                    ls_rollout_penalties_2.append(penalty_2)
-                    penalties_1.append(np.asarray([penalty_1] * config.n_agents))
-                    penalties_2.append(np.asarray([penalty_2] * config.n_agents))
+                all_agts_rews_pens = reward.squeeze(1)
+                agt_rews_pens = all_agts_rews_pens[0]  # rewards and penalties are shared among agents
+                rew = agt_rews_pens[0]
+                coll_pen = agt_rews_pens[1]
+                dep_pen = agt_rews_pens[2]
+                lagrangian_rew = rew + ((lb_t_1 * coll_pen) + (lb_t_2 * dep_pen))
+                # collect separately for plotting
+                ls_rollout_rewards.append(rew)
+                ls_rollout_collectors_penalty.append(coll_pen)
+                ls_rollout_depositors_penalty.append(dep_pen)
+                # collect for experience replay
+                collectors_penalty.append(np.asarray([coll_pen] * config.n_agents))
+                depositors_penalty.append(np.asarray([dep_pen] * config.n_agents))
+                lagrangian_rews.append(np.asarray([lagrangian_rew] * config.n_agents))
 
             episode_rewards.append(np.mean(ls_rollout_rewards))
-            episode_penalties_1.append(np.mean(ls_rollout_penalties_1))
-            episode_penalties_2.append(np.mean(ls_rollout_penalties_2))
+            episode_coll_penalties.append(np.mean(ls_rollout_collectors_penalty))
+            episode_dep_penalties.append(np.mean(ls_rollout_depositors_penalty))
 
-            penalties_1 = np.asarray(penalties_1)
-            penalties_2 = np.asarray(penalties_2)
+            lagrangian_rews = np.asarray(lagrangian_rews)
+            collectors_penalty = np.asarray(collectors_penalty)
+            depositors_penalty = np.asarray(depositors_penalty)
 
-            replay_buffer.push(obs, agent_actions, rewards, penalties_1, penalties_2, next_obs, dones)
+            replay_buffer.push(obs, agent_actions, lagrangian_rews, collectors_penalty, depositors_penalty, next_obs,
+                               dones)
 
             obs = next_obs
             t += config.n_rollout_threads
+
             lb_t_ls_1 = []
             lb_t_ls_2 = []
             lb_t_ls_1_up = []
@@ -195,15 +155,16 @@ def run(config):
                     maddpg.prep_training(device='gpu')
                 else:
                     maddpg.prep_training(device='cpu')
-                print("hi")
 
                 for u_i in range(config.num_updates):
                     for a_i in range(maddpg.nagents):
                         sample = replay_buffer.sample(config.batch_size,
                                                       to_gpu=USE_CUDA)
                         penalty_helper_1, penalty_helper_2 = maddpg.update(sample, a_i, logger=logger)
-                        lb_t_1_ = torch.max(torch.tensor(0.0), (lb_t_1 + ((penalty_helper_1.mean() - alpha_1).float() * b_t)))
-                        lb_t_2_ = torch.max(torch.tensor(0.0), (lb_t_2 + ((penalty_helper_2.mean() - alpha_2).float() * b_t)))
+                        lb_t_1_ = torch.max(torch.tensor(0.0),
+                                            (lb_t_1 + ((penalty_helper_1.mean() - alpha_1).float() * b_t)))
+                        lb_t_2_ = torch.max(torch.tensor(0.0),
+                                            (lb_t_2 + ((penalty_helper_2.mean() - alpha_2).float() * b_t)))
                         lb_t_ls_1.append(lb_t_1_)
                         lb_t_ls_2.append(lb_t_2_)
                     lb_t_ls_1_up.append(torch.from_numpy(np.asarray(lb_t_ls_1)).mean())
@@ -213,26 +174,15 @@ def run(config):
                 lb_t_1 = torch.from_numpy(np.asarray(lb_t_ls_1_up)).mean()
                 lb_t_2 = torch.from_numpy(np.asarray(lb_t_ls_2_up)).mean()
 
-        ep_rews = replay_buffer.get_average_rewards(
-            config.episode_length * config.n_rollout_threads)
-        ep_penals_1, ep_penals_2 = replay_buffer.get_average_penalties(config.episode_length * config.n_rollout_threads)
-
         all_rewards.append(np.sum(episode_rewards))
-        all_penalties_1.append(np.sum(episode_penalties_1))
-        all_penalties_2.append(np.sum(episode_penalties_2))
-        
+        all_penalties_1.append(np.sum(episode_coll_penalties))
+        all_penalties_2.append(np.sum(episode_dep_penalties))
+
         log_rew = np.mean(all_rewards[-1024:])
         log_penalty1 = np.mean(all_penalties_1[-1024:])
         log_penalty2 = np.mean(all_penalties_2[-1024:])
-
-        for a_i, a_ep_rew in enumerate(ep_rews):
-            logger.add_scalar('agent%i/mean_episode_rewards' % a_i, a_ep_rew, ep_i)
-        for a_i, a_ep_pen_1 in enumerate(ep_penals_1):
-            logger.add_scalar('agent%i/mean_episode_penalties_1' % a_i, a_ep_pen_1, ep_i)
-        for a_i, a_ep_pen_2 in enumerate(ep_penals_2):
-            logger.add_scalar('agent%i/mean_episode_penalties_2' % a_i, a_ep_pen_2, ep_i)
-
-        logger.add_scalar("Mean cost over latest 1024 epi/Training:-", log_rew , ep_i)
+       
+        logger.add_scalar("Mean cost over latest 1024 epi/Training:-", log_rew, ep_i)
         logger.add_scalar("Mean penalty_1 over latest 1024 epi/Training:-", log_penalty1, ep_i)
         logger.add_scalar("Mean penalty_2 over latest 1024 epi/Training:-", log_penalty2, ep_i)
         logger.add_scalar('lbt1', lb_t_1, ep_i)
@@ -263,16 +213,16 @@ if __name__ == '__main__':
     parser.add_argument("--n_rollout_threads", default=12, type=int)
     parser.add_argument("--n_training_threads", default=6, type=int)
     parser.add_argument("--buffer_length", default=int(1e6), type=int)
-    parser.add_argument("--n_episodes", default=200000, type=int)
+    parser.add_argument("--n_episodes", default=100000, type=int)
     parser.add_argument("--n_agents", default=8, type=int)
-    parser.add_argument("--episode_length", default=25, type=int)
+    parser.add_argument("--episode_length", default=100, type=int)
     parser.add_argument("--steps_per_update", default=100, type=int)
     parser.add_argument("--num_updates", default=4, type=int,
                         help="Number of updates per update cycle")
     parser.add_argument("--batch_size",
                         default=1024, type=int,
                         help="Batch size for model training")
-    parser.add_argument("--n_exploration_eps", default=200000, type=int)
+    parser.add_argument("--n_exploration_eps", default=100000, type=int)
     parser.add_argument("--init_noise_scale", default=0.3, type=float)
     parser.add_argument("--final_noise_scale", default=0.0, type=float)
     parser.add_argument("--save_interval", default=1000, type=int)
