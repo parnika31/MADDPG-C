@@ -115,7 +115,7 @@ class MADDPG(object):
         vf_loss.backward()
         if parallel:
             average_gradients(curr_agent.critic)
-        torch.nn.utils.clip_grad_norm(curr_agent.critic.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(curr_agent.critic.parameters(), 0.5)
         curr_agent.critic_optimizer.step()
 
         # ----------------Update Penalty_1 Critic ----------------- #
@@ -128,7 +128,7 @@ class MADDPG(object):
         curr_pen_value = curr_agent.penalty_critic(vf_in)
         penalty_loss = MSELoss(curr_pen_value, target_pen_value.detach())
         penalty_loss.backward()
-        torch.nn.utils.clip_grad_norm(curr_agent.penalty_critic.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(curr_agent.penalty_critic.parameters(), 0.5)
         curr_agent.penalty_critic_optimizer.step()
         penalty_helper_1 = curr_pen_value.detach()
 
@@ -141,7 +141,7 @@ class MADDPG(object):
         curr_pen_2_value = curr_agent.penalty2_critic(vf_in)
         penalty2_loss = MSELoss(curr_pen_2_value, target_pen_2_value.detach())
         penalty2_loss.backward()
-        torch.nn.utils.clip_grad_norm(curr_agent.penalty2_critic.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(curr_agent.penalty2_critic.parameters(), 0.5)
         curr_agent.penalty2_critic_optimizer.step()
         penalty_helper_2 = curr_pen_2_value.detach()
 
@@ -176,7 +176,7 @@ class MADDPG(object):
         (pol_loss).backward()
         if parallel:
             average_gradients(curr_agent.policy)
-        torch.nn.utils.clip_grad_norm(curr_agent.policy.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(curr_agent.policy.parameters(), 0.5)
         curr_agent.policy_optimizer.step()
         if logger is not None:
                 logger.add_scalars('agent%i/losses' % agent_i,
