@@ -185,7 +185,7 @@ class MADDPG(object):
                                 'pen_1_loss': penalty_loss,
                                 'pen_2_loss': penalty2_loss},
                                self.niter)
-        return penalty_helper_1,penalty_helper_2
+        return penalty_helper_1.cpu(),penalty_helper_2.cpu()
 
     def update_all_targets(self):
         """
